@@ -16,6 +16,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import List, Literal, Optional
 
+import cv2
 import numpy as np
 import torch
 import torchvision.transforms.functional as TF
@@ -31,6 +32,7 @@ from rich.console import Console
 from rich.progress import track
 from torch import Tensor
 
+from nerfstudio.utils import colormaps
 from nerfstudio.utils.io import load_from_json
 from nerfstudio.utils.misc import torch_compile
 
@@ -192,7 +194,9 @@ def run_monocular_depths(
         # save data
         if save_path is None:
             save_path = images[0].parent.parent / "mono_depth"
+            save_path_debug = images[0].parent.parent / "mono_depth_debug"
         save_path.mkdir(exist_ok=True, parents=True)
+        save_path_debug.mkdir(exist_ok=True, parents=True)
         for idx in track(
             range(image_tensors.shape[0]),
             description=f"saving depth images to {save_path} ...",
@@ -204,6 +208,20 @@ def run_monocular_depths(
             # save the depth
             depth = mono_depths[idx].detach().cpu().numpy()
             np.save(str(file_save_path), depth)
+
+            debug_file_save_path = save_path_debug / Path(file_name).with_suffix(
+                ".png"
+            )
+
+            W = depth.shape[0]
+            H = depth.shape[1]
+            depth_flat = depth.flatten()[:, None]
+            overlay = (
+                    255.0
+                    * colormaps.apply_depth_colormap(torch.from_numpy(depth_flat)).numpy()
+            )
+            overlay = overlay.reshape([H, W, 3])
+            cv2.imwrite(str(debug_file_save_path), overlay.astype(np.uint8))  # type: ignore
 
 
 def depth_from_pretrain(
@@ -334,7 +352,9 @@ def depth_from_pretrain(
             # save data
             if save_path is None:
                 save_path = input_folder / "mono_depth"
+                save_path_debug = input_folder / "mono_depth_debug"
             save_path.mkdir(exist_ok=True, parents=True)
+            save_path_debug.mkdir(exist_ok=True, parents=True)
             for idx in track(
                 range(image_tensors.shape[0]),
                 description=f"saving depth images to {save_path} ...",
@@ -351,7 +371,23 @@ def depth_from_pretrain(
                 )
                 # save the depth
                 depth = depths_completed[idx].detach().cpu().numpy()
+
                 np.save(str(file_save_path), depth)
+
+                debug_file_save_path = save_path_debug / Path(file_name + "_aligned").with_suffix(
+                    ".png"
+                )
+
+                W = depth.shape[0]
+                H = depth.shape[1]
+                depth_flat = depth.flatten()[:, None]
+                overlay = (
+                        255.0
+                        * colormaps.apply_depth_colormap(torch.from_numpy(depth_flat)).numpy()
+                )
+                overlay = overlay.reshape([H, W, 3])
+                cv2.imwrite(str(debug_file_save_path), overlay.astype(np.uint8))  # type: ignore
+
 
     else:
         assert len(os.listdir(input_folder / Path(img_dir_name))) != 0
@@ -431,7 +467,10 @@ def depth_from_pretrain(
             # save data
             if save_path is None:
                 save_path = input_folder / "mono_depth"
+                save_path_debug = input_folder / "mono_depth_debug"
+
             save_path.mkdir(exist_ok=True, parents=True)
+            save_path_debug.mkdir(exist_ok=True, parents=True)
             for idx in track(
                 range(image_tensors.shape[0]),
                 description=f"saving depth images to {save_path} ...",
@@ -448,6 +487,25 @@ def depth_from_pretrain(
                 depth = depths_completed[idx].detach().cpu().numpy()
 
                 np.save(str(file_save_path), depth)
+
+                if return_mode == "mono-aligned":
+                    debug_file_save_path = save_path_debug / Path(file_name + "_aligned").with_suffix(
+                        ".png"
+                    )
+                else:
+                    debug_file_save_path = save_path_debug / Path(file_name).with_suffix(
+                        ".png"
+                    )
+
+                W = depth.shape[0]
+                H = depth.shape[1]
+                depth_flat = depth.flatten()[:, None]
+                overlay = (
+                        255.0
+                        * colormaps.apply_depth_colormap(torch.from_numpy(depth_flat)).numpy()
+                )
+                overlay = overlay.reshape([H, W, 3])
+                cv2.imwrite(str(debug_file_save_path), overlay.astype(np.uint8))  # type: ignore
 
     if create_new_transforms:
         for idx in range(num_frames):
